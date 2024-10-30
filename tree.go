@@ -3,6 +3,7 @@ package goat
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,6 +36,12 @@ type StateWidget interface {
 	Build() (Widget, error)
 }
 
+type effect struct {
+	setup        func() func()
+	cleanup      func()
+	dependencies []any
+}
+
 type element struct {
 	isInitialized   bool
 	widget          Widget
@@ -49,7 +56,8 @@ type element struct {
 
 	children map[int]*element
 
-	state []any
+	states  []any
+	effects []effect
 }
 
 func rebuildTree(newWidget Widget, thisElement *element, constraints Constraints) error {
@@ -95,16 +103,40 @@ func rebuildTree(newWidget Widget, thisElement *element, constraints Constraints
 build:
 	thisElement.queueBuild = false
 	thisElement.widget = newWidget
-	thisElement.isInitialized = true
 	thisElement.prevConstraints = constraints
 
 	switch newWidget := newWidget.(type) {
 	case StateWidget:
 		setupHooks(thisElement)
 		childWidget, err := newWidget.Build()
+		newEffects := curHookContext.effects
 		resetHooks()
 		if err != nil {
 			return err
+		}
+
+		if !thisElement.isInitialized {
+			thisElement.effects = newEffects
+			for i := 0; i < len(thisElement.effects); i++ {
+				thisElement.effects[i].cleanup = thisElement.effects[i].setup()
+			}
+		} else {
+			if len(thisElement.effects) != len(newEffects) {
+				return fmt.Errorf("different number of effects found in widget %s, last build had %d, this build has %d", reflect.TypeOf(newWidget).String(), len(thisElement.effects), len(newEffects))
+			}
+
+			for i := 0; i < len(thisElement.effects); i++ {
+				if slices.Equal(thisElement.effects[i].dependencies, newEffects[i].dependencies) {
+					continue
+				}
+
+				if thisElement.effects[i].cleanup != nil {
+					thisElement.effects[i].cleanup()
+				}
+
+				thisElement.effects[i] = newEffects[i]
+				thisElement.effects[i].cleanup = thisElement.effects[i].setup()
+			}
 		}
 
 		childElement, ok := thisElement.children[0]
@@ -181,6 +213,8 @@ build:
 		panic("widget not implemented")
 	}
 
+	thisElement.isInitialized = true
+
 	return nil
 }
 
@@ -232,6 +266,16 @@ func renderTree(thisElement *element) (Canvas, error) {
 }
 
 func destroyTree(thisElement *element) {
+	for _, childElement := range thisElement.children {
+		destroyTree(childElement)
+	}
+
+	for i := 0; i < len(thisElement.effects); i++ {
+		if thisElement.effects[i].cleanup != nil {
+			thisElement.effects[i].cleanup()
+		}
+	}
+
 	*thisElement = element{}
 }
 

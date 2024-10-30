@@ -101,6 +101,7 @@ func RunApp(w Widget) error {
 	for {
 		select {
 		case <-quitRenderChan:
+			destroyTree(rootElement)
 			return nil
 		default:
 		}

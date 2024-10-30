@@ -5,9 +5,10 @@ import (
 )
 
 type hookContext struct {
-	element        *element
-	stateIndex     int
-	eventListeners []func(context EventContext)
+	element    *element
+	stateIndex int
+	eventFuncs []func(context EventContext)
+	effects    []effect
 }
 
 var curHookContext hookContext
@@ -19,7 +20,7 @@ func setupHooks(e *element) {
 }
 
 func resetHooks() {
-	globalHookEventListeners[curHookContext.element] = curHookContext.eventListeners
+	globalHookEventListeners[curHookContext.element] = curHookContext.eventFuncs
 	curHookContext = hookContext{}
 }
 
@@ -52,15 +53,15 @@ func UseRawState[T any](defaultValue T) (T, func(T)) {
 	curHookContext.stateIndex += 1
 
 	// State does not already exist
-	if curIndex >= len(curElement.state) {
-		curElement.state = append(curElement.state, defaultValue)
+	if curIndex >= len(curElement.states) {
+		curElement.states = append(curElement.states, defaultValue)
 	}
 
-	return curElement.state[curIndex].(T), func(newValue T) {
+	return curElement.states[curIndex].(T), func(newValue T) {
 		// TreeLock.Lock()
 		// defer TreeLock.Unlock()
 
-		curElement.state[curIndex] = newValue
+		curElement.states[curIndex] = newValue
 		curElement.queueBuild = true
 		curElement.queueRender = true
 	}
@@ -72,8 +73,20 @@ type EventContext struct {
 	RenderSize Size
 }
 
-func UseEvent(cb func(context EventContext)) {
+func UseEvent(fn func(context EventContext)) {
 	verifyHooks()
 
-	curHookContext.eventListeners = append(curHookContext.eventListeners, cb)
+	curHookContext.eventFuncs = append(curHookContext.eventFuncs, fn)
+}
+
+// A hook that lets you synchronize a widget with an external system.
+// The setup function will be run when the widget is first mounted, and also whenever the effect's dependencies change.
+// Setup can optionally return a cleanup function, which will be run when the widget is unmounted and also before a dependency change setup is triggered.
+func UseEffect(setup func() func(), dependencies []any) {
+	verifyHooks()
+
+	curHookContext.effects = append(curHookContext.effects, effect{
+		setup:        setup,
+		dependencies: dependencies,
+	})
 }

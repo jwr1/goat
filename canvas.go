@@ -1,6 +1,8 @@
 package goat
 
 import (
+	"image"
+
 	"github.com/gdamore/tcell/v2"
 )
 
@@ -65,5 +67,29 @@ func (c *Canvas) OverlayCanvas(x, y int, topCanvas Canvas) {
 
 			topCanvasIndex += 1
 		}
+	}
+}
+
+func (c *Canvas) OverlayImage(x, y int, image image.Image) {
+	imageBound := image.Bounds()
+	imageWidth := imageBound.Dx()
+	imageHeight := imageBound.Dy()
+
+	imageX := image.Bounds().Min.X
+	imageY := image.Bounds().Min.Y
+
+	for i := y; i < y+imageHeight; i++ {
+		for j := x; j < x+imageWidth; j++ {
+			cell := &c.cells[i*c.size.Width+j]
+
+			cell.rune = ' '
+			r, g, b, _ := image.At(imageX, imageY).RGBA()
+			cell.style = tcell.StyleDefault.Background(tcell.NewRGBColor(int32(r), int32(g), int32(b)))
+
+			imageX += 1
+		}
+
+		imageX = image.Bounds().Min.X
+		imageY += 1
 	}
 }
