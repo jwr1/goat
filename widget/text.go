@@ -5,15 +5,12 @@ import (
 	"unicode"
 
 	. "github.com/jwr1/goat"
-
-	"github.com/gdamore/tcell/v2"
 )
 
 type Text struct {
 	Widget
 
-	Text  string
-	Style tcell.Style
+	Text string
 }
 
 var _ RenderWidget = Text{}
@@ -21,7 +18,7 @@ var _ RenderWidget = Text{}
 func (w Text) Layout(context LayoutContext) (Size, error) {
 	x, y, maxLineWidth := 0, 0, 0
 
-	for _, r := range wordWrap(w.Text, context.Constraints.Max.Width) {
+	for _, r := range wordWrap(w.Text, context.Constraints.Max.Width.Int()) {
 		switch r {
 		case '\n':
 			x = 0
@@ -34,21 +31,21 @@ func (w Text) Layout(context LayoutContext) (Size, error) {
 		}
 	}
 
-	return Size{
-		Width:  max(maxLineWidth, context.Constraints.Min.Width),
-		Height: max(y+1, context.Constraints.Min.Height),
-	}, nil
+	return SizeInt(
+		max(maxLineWidth, context.Constraints.Min.Width.Int()),
+		max(y+1, context.Constraints.Min.Height.Int()),
+	), nil
 }
 
 func (w Text) Paint(context PaintContext) error {
 	x, y := 0, 0
-	for _, r := range wordWrap(w.Text, context.Size.Width) {
+	for _, r := range wordWrap(w.Text, context.Size.Width.Int()) {
 		switch r {
 		case '\n':
 			x = 0
 			y++
 		default:
-			context.Canvas.SetCell(x, y, r, w.Style)
+			context.Canvas.SetCell(x, y, Cell{Rune: r})
 			x++
 		}
 	}

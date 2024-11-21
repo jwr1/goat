@@ -54,8 +54,8 @@ func (w Button) Build() (Widget, error) {
 			}
 		case *tcell.EventMouse:
 			x, y := event.Position()
-			intersects := context.RenderPos.X <= x && x < context.RenderPos.X+context.RenderSize.Width &&
-				context.RenderPos.Y <= y && y < context.RenderPos.Y+context.RenderSize.Height
+			intersects := context.RenderPos.X <= x && x < context.RenderPos.X+context.RenderSize.Width.Int() &&
+				context.RenderPos.Y <= y && y < context.RenderPos.Y+context.RenderSize.Height.Int()
 			if intersects {
 				setButtonState(ButtonStateHover)
 
@@ -75,19 +75,18 @@ func (w Button) Build() (Widget, error) {
 		}
 	})
 
-	var bgColor tcell.Color
+	var bgColor Color
 	switch buttonState {
 	case ButtonStateIdle:
-		bgColor = tcell.ColorPink
+		bgColor = ColorRGB(100, 0, 0)
 	case ButtonStateHover:
-		bgColor = tcell.ColorRed
+		bgColor = ColorRGB(200, 0, 0)
 	case ButtonStateActive:
-		bgColor = tcell.ColorDeepPink
+		bgColor = ColorRGB(255, 0, 0)
 	}
 
-	return Color{
+	return Background{
 		Background: bgColor,
-		Foreground: tcell.ColorBlack,
 		Child: Padding{
 			Padding: w.Padding,
 			Child:   Text{Text: w.Label},

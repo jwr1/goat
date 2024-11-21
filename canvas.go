@@ -1,25 +1,59 @@
 package goat
 
 import (
+	"fmt"
 	"image"
-
-	"github.com/gdamore/tcell/v2"
 )
 
-type canvasCell struct {
-	rune  rune
-	style tcell.Style
+type Cell struct {
+	// Default rune represents no change in text
+	Rune rune
+
+	Background, Foreground Color
+
+	TextStyle *CellTextStyle
+}
+
+type CellTextStyle struct {
+	Bold, Blink, Dim, Italic, Underline, StrikeThrough bool
+
+	Url   string
+	UrlId string
+}
+
+func (bottom Cell) Blend(top Cell) Cell {
+	result := Cell{
+		Rune:       top.Rune,
+		Background: bottom.Background.Blend(top.Background),
+		// TODO: take background into account with transparent foreground
+		Foreground: bottom.Foreground.Blend(top.Foreground),
+		TextStyle:  top.TextStyle,
+	}
+
+	// If top cell does not override the rune or text style, then fallback to the bottom cell's
+	if top.Rune == rune(0) {
+		result.Rune = bottom.Rune
+	}
+	if top.TextStyle == nil {
+		result.TextStyle = bottom.TextStyle
+	}
+
+	return result
 }
 
 type Canvas struct {
 	size  Size
-	cells []canvasCell
+	cells []Cell
 }
 
 func NewCanvas(size Size) Canvas {
+	if size.HasInf() {
+		panic(fmt.Sprint("canvas cannot be created with infinite size: ", size.String()))
+	}
+
 	return Canvas{
 		size:  size,
-		cells: make([]canvasCell, size.Width*size.Height),
+		cells: make([]Cell, size.Width.Int()*size.Height.Int()),
 	}
 }
 
@@ -27,43 +61,31 @@ func (c *Canvas) Size() Size {
 	return c.size
 }
 
-func (c *Canvas) GetCell(x, y int) (rune, tcell.Style) {
-	cell := &c.cells[y*c.size.Width+x]
-	return cell.rune, cell.style
+func (c *Canvas) GetCell(x, y int) Cell {
+	return c.cells[y*c.size.Width.Int()+x]
 }
 
-func (c *Canvas) SetCell(x, y int, rune rune, style tcell.Style) {
-	cell := &c.cells[y*c.size.Width+x]
-	cell.rune = rune
-	cell.style = style
+func (c *Canvas) SetCell(x, y int, cell Cell) {
+	c.cells[y*c.size.Width.Int()+x] = cell
 }
 
-func (c *Canvas) FillStyle(x, y, width, height int, style tcell.Style) {
+func (c *Canvas) FillBackground(x, y, width, height int, background Color) {
 	for i := y; i < y+height; i++ {
 		for j := x; j < x+width; j++ {
-			cell := &c.cells[i*c.size.Width+j]
-			cell.style = style
-			c.cells[i*c.size.Width+j] = *cell
+			cell := &c.cells[i*c.size.Width.Int()+j]
+			cell.Background = background
 		}
 	}
 }
 
 func (c *Canvas) OverlayCanvas(x, y int, topCanvas Canvas) {
 	topCanvasIndex := 0
-	for i := y; i < y+topCanvas.size.Height; i++ {
-		for j := x; j < x+topCanvas.size.Width; j++ {
-			bottomCell := &c.cells[i*c.size.Width+j]
+	for i := y; i < y+topCanvas.size.Height.Int(); i++ {
+		for j := x; j < x+topCanvas.size.Width.Int(); j++ {
+			bottomCell := &c.cells[i*c.size.Width.Int()+j]
 			topCell := topCanvas.cells[topCanvasIndex]
 
-			bottomCell.rune = topCell.rune
-			fg, bg, attr := topCell.style.Decompose()
-			bottomCell.style = bottomCell.style.Attributes(attr)
-			if fg != tcell.ColorDefault {
-				bottomCell.style = bottomCell.style.Foreground(fg)
-			}
-			if bg != tcell.ColorDefault {
-				bottomCell.style = bottomCell.style.Background(bg)
-			}
+			*bottomCell = bottomCell.Blend(topCell)
 
 			topCanvasIndex += 1
 		}
@@ -80,16 +102,15 @@ func (c *Canvas) OverlayImage(x, y int, image image.Image) {
 
 	for i := y; i < y+imageHeight; i++ {
 		for j := x; j < x+imageWidth; j++ {
-			cell := &c.cells[i*c.size.Width+j]
+			c.cells[i*c.size.Width.Int()+j] = Cell{
+				Rune:       ' ',
+				Background: ColorFromImageColor(image.At(imageX, imageY)),
+			}
 
-			cell.rune = ' '
-			r, g, b, _ := image.At(imageX, imageY).RGBA()
-			cell.style = tcell.StyleDefault.Background(tcell.NewRGBColor(int32(r), int32(g), int32(b)))
-
-			imageX += 1
+			imageX++
 		}
 
 		imageX = image.Bounds().Min.X
-		imageY += 1
+		imageY++
 	}
 }

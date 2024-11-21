@@ -4,8 +4,6 @@ import (
 	"fmt"
 
 	. "github.com/jwr1/goat"
-
-	"github.com/gdamore/tcell/v2"
 )
 
 type SizedBox struct {
@@ -18,7 +16,7 @@ type SizedBox struct {
 var _ RenderWidget = SizedBox{}
 
 func (w SizedBox) Layout(context LayoutContext) (Size, error) {
-	return Size{Width: w.Width, Height: w.Height}, nil
+	return SizeInt(w.Width, w.Height), nil
 }
 
 func (w SizedBox) Paint(context PaintContext) error {
@@ -40,10 +38,10 @@ func (w Padding) Layout(context LayoutContext) (Size, error) {
 		Min: context.Constraints.Min.SubEdgeInserts(w.Padding),
 		Max: context.Constraints.Max.SubEdgeInserts(w.Padding),
 	}
-	if childConstrains.Min.IsNegative() {
+	if childConstrains.Min.HasNeg() {
 		childConstrains.Min = SizeZero
 	}
-	if childConstrains.Max.IsNegative() {
+	if childConstrains.Max.HasNeg() {
 		return Size{}, fmt.Errorf("not enough space for padding given constraints")
 	}
 
@@ -67,17 +65,16 @@ func (w Padding) Paint(context PaintContext) error {
 	return nil
 }
 
-type Color struct {
+type Background struct {
 	Widget
 
 	Child      Widget
-	Foreground tcell.Color
-	Background tcell.Color
+	Background Color
 }
 
-var _ RenderWidget = Color{}
+var _ RenderWidget = Background{}
 
-func (w Color) Layout(context LayoutContext) (Size, error) {
+func (w Background) Layout(context LayoutContext) (Size, error) {
 	size, err := context.LayoutChild(0, w.Child, context.Constraints)
 	if err != nil {
 		return Size{}, err
@@ -89,8 +86,7 @@ func (w Color) Layout(context LayoutContext) (Size, error) {
 	return size, nil
 }
 
-func (w Color) Paint(context PaintContext) error {
-	context.Canvas.FillStyle(0, 0, context.Size.Width, context.Size.Height,
-		tcell.StyleDefault.Foreground(w.Foreground).Background(w.Background))
+func (w Background) Paint(context PaintContext) error {
+	context.Canvas.FillBackground(0, 0, context.Size.Width.Int(), context.Size.Height.Int(), w.Background)
 	return nil
 }

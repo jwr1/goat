@@ -17,11 +17,20 @@ type Image struct {
 var _ RenderWidget = Image{}
 
 func (w Image) Layout(context LayoutContext) (Size, error) {
-	return Size{Width: context.Constraints.Max.Width, Height: context.Constraints.Max.Height}, nil
+	bounds := w.image.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	if !context.Constraints.Max.Width.IsInf() {
+		width = context.Constraints.Max.Width.Int()
+	}
+	if !context.Constraints.Max.Height.IsInf() {
+		height = context.Constraints.Max.Height.Int()
+	}
+	return SizeInt(width, height), nil
 }
 
 func (w Image) Paint(context PaintContext) error {
-	dst := image.NewRGBA(image.Rect(0, 0, context.Size.Width, context.Size.Height))
+	dst := image.NewRGBA(image.Rect(0, 0, context.Size.Width.Int(), context.Size.Height.Int()))
 	draw.NearestNeighbor.Scale(dst, dst.Rect, w.image, w.image.Bounds(), draw.Over, nil)
 
 	context.Canvas.OverlayImage(0, 0, dst)

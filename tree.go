@@ -9,58 +9,7 @@ import (
 	"strings"
 )
 
-type LayoutContext struct {
-	Constraints   Constraints
-	LayoutChild   func(key int, c Widget, constraints Constraints) (Size, error)
-	PositionChild func(key int, pos Pos) error
-	// PositionChildInViewport func(key int, pos Pos, childStart Pos, childEnd Pos) error
-}
-
-type PaintContext struct {
-	Canvas Canvas
-	Size   Size
-}
-
-type Widget interface {
-	isWidget()
-}
-
-type RenderWidget interface {
-	Widget
-	Layout(context LayoutContext) (Size, error)
-	Paint(context PaintContext) error
-}
-
-type StateWidget interface {
-	Widget
-	Build() (Widget, error)
-}
-
-type effect struct {
-	setup        func() func()
-	cleanup      func()
-	dependencies []any
-}
-
-type element struct {
-	isInitialized   bool
-	widget          Widget
-	size            Size
-	pos             Pos
-	renderCanvas    Canvas
-	renderAbsPos    Pos
-	prevConstraints Constraints
-
-	queueBuild  bool
-	queueRender bool
-
-	children map[int]*element
-
-	states  []any
-	effects []effect
-}
-
-func rebuildTree(newWidget Widget, thisElement *element, constraints Constraints) error {
+func rebuildTree(newWidget Widget, thisElement *Element, constraints Constraints) error {
 	if thisElement.queueBuild || !thisElement.isInitialized {
 		goto build
 	}
@@ -82,7 +31,7 @@ func rebuildTree(newWidget Widget, thisElement *element, constraints Constraints
 
 	// If widget props have changed, then perform a build.
 	if !reflect.DeepEqual(thisElement.widget, newWidget) {
-		thisElement.queueRender = true
+		thisElement.queuePaint = true
 		goto build
 	}
 
@@ -109,7 +58,7 @@ build:
 	case StateWidget:
 		setupHooks(thisElement)
 		childWidget, err := newWidget.Build()
-		newEffects := curHookContext.effects
+		newEffects := currentHookContext.effects
 		resetHooks()
 		if err != nil {
 			return err
@@ -141,8 +90,8 @@ build:
 
 		childElement, ok := thisElement.children[0]
 		if !ok {
-			childElement = &element{}
-			thisElement.children = map[int]*element{
+			childElement = &Element{}
+			thisElement.children = map[int]*Element{
 				0: childElement,
 			}
 		}
@@ -154,14 +103,14 @@ build:
 
 	case RenderWidget:
 		oldChildren := thisElement.children
-		newChildren := make(map[int]*element)
+		newChildren := make(map[int]*Element)
 
 		layoutContext := LayoutContext{
 			Constraints: constraints,
 			LayoutChild: func(key int, c Widget, constraints Constraints) (Size, error) {
 				childElement, ok := oldChildren[key]
 				if !ok {
-					childElement = &element{}
+					childElement = &Element{parent: thisElement}
 				} else {
 					delete(oldChildren, key)
 				}
@@ -205,7 +154,7 @@ build:
 		thisElement.children = newChildren
 
 		// if size != thisElement.size {
-		thisElement.queueRender = true
+		thisElement.queuePaint = true
 		// }
 
 		thisElement.size = size
@@ -218,7 +167,7 @@ build:
 	return nil
 }
 
-func renderTree(thisElement *element) (Canvas, error) {
+func renderTree(thisElement *Element) (Canvas, error) {
 	var resultCanvas Canvas
 
 	switch widget := thisElement.widget.(type) {
@@ -231,8 +180,8 @@ func renderTree(thisElement *element) (Canvas, error) {
 		resultCanvas = canvas
 
 	case RenderWidget:
-		if thisElement.queueRender {
-			thisElement.queueRender = false
+		if thisElement.queuePaint {
+			thisElement.queuePaint = false
 			renderContext := PaintContext{
 				Canvas: NewCanvas(thisElement.size),
 				Size:   thisElement.size,
@@ -265,7 +214,7 @@ func renderTree(thisElement *element) (Canvas, error) {
 	return resultCanvas, nil
 }
 
-func destroyTree(thisElement *element) {
+func destroyTree(thisElement *Element) {
 	for _, childElement := range thisElement.children {
 		destroyTree(childElement)
 	}
@@ -276,10 +225,10 @@ func destroyTree(thisElement *element) {
 		}
 	}
 
-	*thisElement = element{}
+	*thisElement = Element{}
 }
 
-func stringifyTree(thisElement *element, builder *strings.Builder, indent int) {
+func stringifyTree(thisElement *Element, builder *strings.Builder, indent int) {
 	strIndent := strings.Repeat(" ", indent)
 
 	builder.WriteString(strIndent)

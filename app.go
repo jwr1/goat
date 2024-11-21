@@ -85,7 +85,7 @@ func RunApp(w Widget) error {
 		}
 	}()
 
-	rootElement := &element{}
+	rootElement := &Element{}
 
 	// debugFile, _ := os.Create("debug-tree.txt")
 	// debugFileSize := 0
@@ -107,7 +107,7 @@ func RunApp(w Widget) error {
 		}
 
 		screenWidth, screenHeight := screen.Size()
-		rootConstraints := Size{screenWidth, screenHeight}.TightConstraints()
+		rootConstraints := SizeInt(screenWidth, screenHeight).TightConstraints()
 
 		treeLock.Lock()
 
@@ -130,10 +130,53 @@ func RunApp(w Widget) error {
 }
 
 func drawCanvasToScreen(canvas Canvas, screen tcell.Screen) {
-	width := canvas.size.Width
+	width := canvas.size.Width.Int()
 
 	for i, cell := range canvas.cells {
-		screen.SetContent(i%width, i/width, cell.rune, nil, cell.style)
+		style := tcell.StyleDefault.
+			Foreground(tcell.NewRGBColor(int32(cell.Foreground.R), int32(cell.Foreground.G), int32(cell.Foreground.B))).
+			Background(tcell.NewRGBColor(int32(cell.Background.R), int32(cell.Background.G), int32(cell.Background.B)))
+
+		const uint8Midpoint = 0xFF / 2
+
+		// If opacity is less than half, then use terminal default color
+		if cell.Foreground.A < uint8Midpoint {
+			style = style.Foreground(tcell.ColorDefault)
+		}
+		if cell.Background.A < uint8Midpoint {
+			style = style.Background(tcell.ColorDefault)
+		}
+
+		if cell.TextStyle != nil {
+			attr := tcell.AttrNone
+			if cell.TextStyle != nil {
+				if cell.TextStyle.Bold {
+					attr |= tcell.AttrBold
+				}
+				if cell.TextStyle.Blink {
+					attr |= tcell.AttrBlink
+				}
+				if cell.TextStyle.Dim {
+					attr |= tcell.AttrDim
+				}
+				if cell.TextStyle.Italic {
+					attr |= tcell.AttrItalic
+				}
+				if cell.TextStyle.Underline {
+					attr |= tcell.AttrUnderline
+				}
+				if cell.TextStyle.StrikeThrough {
+					attr |= tcell.AttrStrikeThrough
+				}
+			}
+
+			style = style.
+				Attributes(attr).
+				Url(cell.TextStyle.Url).
+				UrlId(cell.TextStyle.UrlId)
+		}
+
+		screen.SetContent(i%width, i/width, cell.Rune, nil, style)
 	}
 
 	screen.Show()

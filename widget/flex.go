@@ -48,29 +48,23 @@ func (w Flex) Layout(context LayoutContext) (Size, error) {
 
 	mainAxisSize := func(s Size) int {
 		if isHorizontal {
-			return s.Width
+			return s.Width.Int()
 		} else {
-			return s.Height
+			return s.Height.Int()
 		}
 	}
 	crossAxisSize := func(s Size) int {
 		if isHorizontal {
-			return s.Height
+			return s.Height.Int()
 		} else {
-			return s.Width
+			return s.Width.Int()
 		}
 	}
 	sizeFromAxes := func(mainAxisSize, crossAxisSize int) Size {
 		if isHorizontal {
-			return Size{
-				Width:  mainAxisSize,
-				Height: crossAxisSize,
-			}
+			return SizeInt(mainAxisSize, crossAxisSize)
 		} else {
-			return Size{
-				Width:  crossAxisSize,
-				Height: mainAxisSize,
-			}
+			return SizeInt(crossAxisSize, mainAxisSize)
 		}
 	}
 	positionChild := func(key, mainAxisPos, crossAxisPos int) error {
@@ -259,18 +253,18 @@ func (w Center) Layout(context LayoutContext) (Size, error) {
 
 	size := context.Constraints.Max
 	if w.WidthFactor >= 1 {
-		size.Width = int(float64(childSize.Width) * w.WidthFactor)
+		size.Width = DimensionInt(int(float64(childSize.Width.Int()) * w.WidthFactor))
 	}
 	if w.HeightFactor >= 1 {
-		size.Height = int(float64(childSize.Height) * w.HeightFactor)
+		size.Height = DimensionInt(int(float64(childSize.Height.Int()) * w.HeightFactor))
 	}
 	size = size.Clamp(context.Constraints)
 
 	remainingSize := size.Sub(childSize)
 
 	context.PositionChild(0, Pos{
-		X: remainingSize.Width / 2,
-		Y: remainingSize.Height / 2,
+		X: remainingSize.Width.Int() / 2,
+		Y: remainingSize.Height.Int() / 2,
 	})
 
 	return size, nil
